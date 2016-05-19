@@ -12,6 +12,7 @@ import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.bolt.KafkaBolt;
 import org.apache.storm.kafka.bolt.mapper.FieldNameBasedTupleToKafkaMapper;
 import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
+import org.apache.storm.kafka.trident.OpaqueTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TridentKafkaConfig;
 import org.apache.storm.spout.SchemeAsMultiScheme;
@@ -51,7 +52,7 @@ public class TridentKafkaTopology {
 
 	private String zkUrl;
 	private String brokerUrl;
-	private final String topic = "DRPC-test";
+	private final String topic = "test";
 
 	TridentKafkaTopology(String zkUrl, String brokerUrl) {
 		this.zkUrl = zkUrl;
@@ -67,14 +68,16 @@ public class TridentKafkaTopology {
 	 *
 	 * @return a transactional trident kafka spout.
 	 */
-	private TransactionalTridentKafkaSpout createKafkaSpout() {
+	private OpaqueTridentKafkaSpout createKafkaSpout() {
+		String clientId = TridentKafkaTopology.class.getSimpleName();
 		ZkHosts hosts = new ZkHosts(zkUrl);
-		TridentKafkaConfig config = new TridentKafkaConfig(hosts, topic);
+		TridentKafkaConfig config = new TridentKafkaConfig(hosts, topic,
+				clientId);
 		config.scheme = new SchemeAsMultiScheme(new StringScheme());
 
 		// Consume new data from the topic
 		config.startOffsetTime = kafka.api.OffsetRequest.LatestTime();
-		return new TransactionalTridentKafkaSpout(config);
+		return new OpaqueTridentKafkaSpout(config);
 	}
 
 	private Stream addDRPCStream(TridentTopology tridentTopology,
@@ -218,5 +221,6 @@ public class TridentKafkaTopology {
 		cluster.killTopology("kafkaBolt");
 		cluster.killTopology("wordCounter");
 		cluster.shutdown();
+		System.exit(1);
 	}
 }
