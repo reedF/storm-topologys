@@ -99,6 +99,7 @@
 		<module>topology-utils</module>
 		<module>topology-kafka</module>
 
+		<module>topology-drpc</module>
 	</modules>
 	<build>
 		<sourceDirectory>src/main/java</sourceDirectory>
