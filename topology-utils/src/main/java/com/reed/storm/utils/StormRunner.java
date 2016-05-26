@@ -66,9 +66,11 @@ public final class StormRunner {
 
 	/**
 	 * 上传jar并在远程运行topology,注：此方法会根据topologyName先kill掉原有topology
-	 * @param nimbusIp
-	 * @param nimbusPort
-	 * @param jarPath
+	 * @param nimbusIp，nimbus节点IP
+	 * @param nimbusPort,nimbus thirft端口，默认6627
+	 * @param zkIps,storm配置的zk集群，不带端口号，格式：{"ip1","ip2","ip3"}
+	 * @param zkPort,zk端口，默认2181
+	 * @param jarPath,本地jar目录
 	 * @param topologyName
 	 * @param topology
 	 * @throws AlreadyAliveException
