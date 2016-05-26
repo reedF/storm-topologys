@@ -12,13 +12,18 @@ public class DeployTopology2Remote {
 	public static void main(String[] args) throws AlreadyAliveException,
 			InvalidTopologyException, AuthorizationException, TException,
 			InterruptedException {
+		String[] zkIps = new String[] { "172.28.20.103",
+				"172.28.20.104", "172.28.20.105" };
 		DrpcTopology drpcTopology = new DrpcTopology();
 		String jar = System.getProperty("user.dir")
 				+ "/target/topology-drpc-1.0-SNAPSHOT.jar";
 		// upload and run
-		//注：此方式提交DrpcTopology时，远程topolgy运行在loacl模式，连接的zk为localhost,报异常，无法获取return值
-		//可通过在远程使用storm jar 提交即可正常使用,原因待查(怀疑nimbus.getClient().submitTopology提交时是否有默认参数)
-		StormRunner.deployJar2Remote("172.28.19.91", 6627, jar, drpcTopology
-				.getClass().getSimpleName(), drpcTopology.wordCount().build());
+		// 注：此方式提交DrpcTopology时，远程topolgy运行在loacl模式，连接的zk为localhost,报异常，无法获取return值
+		// 可通过在远程使用storm jar
+		// 提交即可正常使用,原因待查(怀疑nimbus.getClient().submitTopology提交时是否有默认参数)
+		//已解决：StormRunner.deployJar2Remote中配置远程strom
+		StormRunner.deployJar2Remote("172.28.19.91", 6627, zkIps, 2181, jar,
+				drpcTopology.getClass().getSimpleName(), drpcTopology
+						.wordCount().build());
 	}
 }

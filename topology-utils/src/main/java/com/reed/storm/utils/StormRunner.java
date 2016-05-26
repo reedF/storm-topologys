@@ -1,5 +1,6 @@
 package com.reed.storm.utils;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -78,12 +79,18 @@ public final class StormRunner {
 	 */
 	@SuppressWarnings("unchecked")
 	public static void deployJar2Remote(String nimbusIp, int nimbusPort,
-			String jarPath, String topologyName, StormTopology topology)
-			throws AlreadyAliveException, InvalidTopologyException,
-			AuthorizationException, TException, InterruptedException {
+			String[] zkIps, int zkPort, String jarPath, String topologyName,
+			StormTopology topology) throws AlreadyAliveException,
+			InvalidTopologyException, AuthorizationException, TException,
+			InterruptedException {
+		// 读取本地 Storm 配置文件
 		Map storm_conf = Utils.readStormConfig();
-		storm_conf.put(Config.NIMBUS_HOST, nimbusIp);
-		// storm_conf.put(Config.NIMBUS_THRIFT_PORT,nimbusPort);
+		// 设定为远程storm配置
+		storm_conf.put(Config.NIMBUS_SEEDS,
+				Arrays.asList(new String[] { nimbusIp }));
+		storm_conf.put(Config.STORM_ZOOKEEPER_SERVERS, Arrays.asList(zkIps));
+		storm_conf.put(Config.NIMBUS_THRIFT_PORT, nimbusPort);
+		storm_conf.put(Config.STORM_ZOOKEEPER_PORT, zkPort);
 		Client client = NimbusClient.getConfiguredClient(storm_conf)
 				.getClient();
 		NimbusClient nimbus = new NimbusClient(storm_conf, nimbusIp, nimbusPort);
@@ -101,7 +108,7 @@ public final class StormRunner {
 					break;
 				}
 			}
-		}		
+		}
 		nimbus.getClient().submitTopology(topologyName, uploadedJarLocation,
 				jsonConf, topology);
 	}
