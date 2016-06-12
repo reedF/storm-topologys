@@ -100,6 +100,7 @@
 		<module>topology-kafka</module>
 
 		<module>topology-drpc</module>
+		<module>topology-rollingTop</module>
 	</modules>
 	<build>
 		<sourceDirectory>src/main/java</sourceDirectory>
