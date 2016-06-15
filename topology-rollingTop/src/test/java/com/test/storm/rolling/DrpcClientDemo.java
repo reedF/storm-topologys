@@ -31,7 +31,7 @@ public class DrpcClientDemo {
 		for (int i = 0; i < 100; i++) {
 			String r = client.execute(RollingTopTopology.functionName, str);
 			System.out.println(">>>>>>>>>>>>>>>>Results:" + r);
-			Thread.sleep((long) 5 * 1000);
+			Thread.sleep((long) 5 * 10000);
 		}
 	}
 

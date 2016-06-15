@@ -12,8 +12,13 @@ import org.apache.storm.kafka.StringScheme;
 import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.trident.OpaqueTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TridentKafkaConfig;
+import org.apache.storm.redis.common.config.JedisPoolConfig;
+import org.apache.storm.redis.trident.state.RedisState;
+import org.apache.storm.redis.trident.state.RedisStateQuerier;
+import org.apache.storm.redis.trident.state.RedisStateUpdater;
 import org.apache.storm.spout.SchemeAsMultiScheme;
 import org.apache.storm.topology.base.BaseWindowedBolt;
+import org.apache.storm.trident.Stream;
 import org.apache.storm.trident.TridentState;
 import org.apache.storm.trident.TridentTopology;
 import org.apache.storm.trident.operation.Consumer;
@@ -36,6 +41,8 @@ import com.reed.storm.topology.rolling.bolt.FunctionNullToZero;
 import com.reed.storm.topology.rolling.bolt.JsonSplit;
 import com.reed.storm.topology.rolling.bolt.NowCount;
 import com.reed.storm.topology.rolling.bolt.WindowMapGet;
+import com.reed.storm.topology.rolling.redis.RollingRedisLookupMapper;
+import com.reed.storm.topology.rolling.redis.RollingRedisStoreMapper;
 import com.reed.storm.utils.StormRunner;
 
 /**
@@ -62,6 +69,7 @@ public class RollingTopTopology {
 
 	private static final String zkUrl = "172.28.20.103:2181,172.28.20.104:2181,172.28.20.105:2181";
 	private static final String topic = "test";
+	private static final String redisHost = "172.28.29.151";
 
 	public static OpaqueTridentKafkaSpout createKafkaSpout() {
 		String clientId = RollingTopTopology.class.getSimpleName();
@@ -74,9 +82,15 @@ public class RollingTopTopology {
 		return new OpaqueTridentKafkaSpout(config);
 	}
 
-	@SuppressWarnings("serial")
-	public static TridentState addTridentState(TridentTopology tridentTopology) {
+	public static RedisState.Factory createRedisFactory(String redisHost,
+			int redisPort) {
+		JedisPoolConfig poolConfig = new JedisPoolConfig.Builder()
+				.setHost(redisHost).setPort(redisPort).build();
+		return new RedisState.Factory(poolConfig);
+	}
 
+	@SuppressWarnings("serial")
+	public static Stream addWindow2Topology(TridentTopology tridentTopology) {
 		return tridentTopology
 				.newStream(txId, createKafkaSpout())
 				.parallelismHint(2)
@@ -95,37 +109,42 @@ public class RollingTopTopology {
 						new BaseWindowedBolt.Duration(1, TimeUnit.SECONDS),
 						windowStoreFactory, new Fields(projectName),
 						new CountMapAsAggregator(),
-						new Fields(projectName, "num"))
-				.peek(new Consumer() {
+						new Fields(projectName, "num")).peek(new Consumer() {
 					@Override
 					public void accept(TridentTuple input) {
 						LOG.info("Received tuple: [{},{}]",
 								input.getValueByField(projectName),
 								input.getValueByField("num"));
 					}
-				})
-				.groupBy(new Fields(projectName))
-				.persistentAggregate(new MemoryMapState.Factory(),
-						new Fields("num"), new NowCount(), new Fields("count"));
+				});
+	}
+
+	public static TridentState addMemaryState(Stream steam) {
+
+		return steam.groupBy(new Fields(projectName)).persistentAggregate(
+				new MemoryMapState.Factory(), new Fields("num"),
+				new NowCount(), new Fields("count"));
 		// .partitionPersist(windowStateFactory, new Fields(projectName),
 		// stateUpdater, new Fields("count"));
 	}
 
-	/**
-	 * DRPC简单使用，统计kafka topic内wordcount
-	 * @return
-	 */
-	@SuppressWarnings("serial")
-	public static TridentTopology wordCount(LocalDRPC drpc) {
-		TridentTopology tridentTopology = new TridentTopology();
-		TridentState state = addTridentState(tridentTopology);
+	public static TridentState addRedisState(Stream steam) {
+
+		return steam.partitionPersist(createRedisFactory(redisHost, 6379),
+				new Fields(projectName, "num"), new RedisStateUpdater(
+						new RollingRedisStoreMapper()).withExpire(300),
+				new Fields("count"));
+	}
+
+	public static void drpcResponseInMemary(TridentTopology tridentTopology,
+			LocalDRPC drpc) {
+		TridentState state = addMemaryState(addWindow2Topology(tridentTopology));
 		// state.newValuesStream().peek(new Consumer() {
 		// @Override
 		// public void accept(TridentTuple input) {
 		// LOG.info("state tuple: [{}]", input);
 		// }
 		// });
-
 		tridentTopology
 				.newDRPCStream(functionName, drpc)
 				// 切分DRPC请求参数
@@ -139,8 +158,37 @@ public class RollingTopTopology {
 					public void accept(TridentTuple input) {
 						// LOG.info("DRPC tuple: [{}]", input);
 					}
-				})
-				.project(new Fields(projectName, "result"));
+				}).project(new Fields(projectName, "result"));
+	}
+
+	public static void drpcResponseInRedis(TridentTopology tridentTopology,
+			LocalDRPC drpc) {
+		TridentState state = addRedisState(addWindow2Topology(tridentTopology));
+		tridentTopology
+				.newDRPCStream(functionName, drpc)
+				// 切分DRPC请求参数
+				.each(new Fields("args"), new Split(), new Fields("arg"))
+				.groupBy(new Fields("arg"))
+				.stateQuery(state, new Fields("arg"),
+						new RedisStateQuerier(new RollingRedisLookupMapper()),
+						new Fields(projectName,"count","num")).peek(new Consumer() {
+					@Override
+					public void accept(TridentTuple input) {
+						//LOG.info("DRPC tuple: [{}]", input);
+					}
+				}).project(new Fields(projectName, "count"));
+	}
+
+	/**
+	 * DRPC简单使用，统计kafka topic内wordcount
+	 * @return
+	 */
+	public static TridentTopology wordCount(LocalDRPC drpc) {
+		TridentTopology tridentTopology = new TridentTopology();
+
+		// drpcResponseInMemary(tridentTopology, drpc);
+		drpcResponseInRedis(tridentTopology, drpc);
+
 		return tridentTopology;
 	}
 
@@ -160,7 +208,6 @@ public class RollingTopTopology {
 		LOG.info(sf.toString());
 	}
 
-	@SuppressWarnings("deprecation")
 	public static void main(String[] args) throws AlreadyAliveException,
 			InvalidTopologyException, AuthorizationException,
 			InterruptedException {
