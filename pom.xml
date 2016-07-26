@@ -74,6 +74,11 @@
 				<version>${storm.version}</version>
 			</dependency>
 			<dependency>
+				<groupId>org.apache.storm</groupId>
+				<artifactId>storm-elasticsearch</artifactId>
+				<version>${storm.version}</version>
+			</dependency>
+			<dependency>
 				<groupId>org.apache.kafka</groupId>
 				<artifactId>kafka_2.11</artifactId>
 				<version>${kafka.version}</version>
@@ -101,6 +106,7 @@
 
 		<module>topology-drpc</module>
 		<module>topology-rollingTop</module>
+		<module>topology-es</module>
 	</modules>
 	<build>
 		<sourceDirectory>src/main/java</sourceDirectory>
